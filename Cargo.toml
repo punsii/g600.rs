@@ -1,0 +1,9 @@
+[package]
+name = "brightness"
+version = "1.1.0"
+authors = ["Paul Menhart"]
+edition = "2021"
+
+[dependencies]
+
+[dev-dependencies]
