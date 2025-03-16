@@ -1,6 +1,6 @@
 [package]
-name = "brightness"
-version = "1.1.0"
+name = "g600"
+version = "0.0.1"
 authors = ["Paul Menhart"]
 edition = "2021"
 

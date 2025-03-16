@@ -1,7 +1,7 @@
 { pkgs, ... }:
 pkgs.rustPlatform.buildRustPackage {
-  pname = "brightness";
-  version = "1.1.0";
+  pname = "g600";
+  version = "0.0.1";
 
   src = ./.;
   cargoLock = {

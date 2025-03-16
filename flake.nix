@@ -28,17 +28,23 @@
         inherit system;
       };
 
-      g600 = import ./default.nix;
+      g600 = pkgs.callPackage ./default.nix { };
     in
     {
       packages.${system}.default = g600;
 
+      apps.${system}.default = {
+        type = "app";
+        program = "${self.packages.${system}.default}/bin/g600";
+      };
+
       devShells.${system} = {
         default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            treefmtEval.config.build.wrapper
-            rust-analyzer
-          ];
+          buildInputs = with pkgs;
+            [
+              treefmtEval.config.build.wrapper
+              rust-analyzer
+            ];
         };
       };
 
