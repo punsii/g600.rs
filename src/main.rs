@@ -1,4 +1,5 @@
-use std::{fs, path::Path};
+use std::fs;
+use std::path::PathBuf;
 
 // #include <linux/input.h>
 // #include <stdio.h>
@@ -18,33 +19,18 @@ It's a good idea to configure G600 with Logitech Gaming Software before running 
 ";
 
 // struct input_event events[64];
-const K_DIR: &str = "/dev/input/by-path/";
+const K_DIR: &str = "/dev/input/by-id/";
 const K_PREFIX: &str = "usb-Logitech_Gaming_Mouse_G600_";
 const K_SUFFIX: &str = "-if01-event-kbd";
 //
 
 fn main() {
-    // let args: Vec<String> = env::args().collect();
-    // let input = &args[1].parse::<i32>().unwrap();
-    //
-    // assert!(
-    //     (0..=100).contains(input),
-    //     "Enter a number between 0 and 100."
-    // );
-    //
-    // let value = (*input as f32 * 2.55) as u8;
-    // fs::write(
-    //     "/sys/class/backlight/amdgpu_bl1/brightness",
-    //     value.to_string(),
-    // )
-    // .expect("Unable to write file");
-
     println!("{GREETING}");
 
     // char path[1024];
     // int find_error = find_g600(&path);
     let path_exists = find_g600();
-    println!("{}", path_exists.to_string())
+    // println!("{}", path_exists.to_string())
     //   if (find_error) {
     //     printf("Error: Couldn't find G600 input device.\n");
     //     switch(find_error) {
@@ -151,19 +137,42 @@ fn main() {
 //
 // // Returns non-0 on error.
 // int find_g600(char *path) {
-fn find_g600() -> bool {
+fn find_g600() -> Result<PathBuf, std::io::Error> {
     // struct dirent *ent;
     // if (!(dir = opendir(K_DIR))) {
     //     return 1;
     // }
-    if !Path::new(K_DIR).exists() {
-        return false;
-    }
-    let paths = fs::read_dir(K_DIR).unwrap();
-    for path in paths {
-        println!("Path: {}", path.unwrap().path().display())
-    }
-    //   while ((ent = readdir(dir))) {
+    // while ((ent = readdir(dir))) {
+
+    fs::read_dir(K_DIR)?
+        .filter_map(Result::ok)
+        .find_map(|entry| {
+            let path = entry.path();
+            let filename = path.file_stem()?.to_str()?;
+            if filename.starts_with(K_PREFIX) && filename.ends_with(K_SUFFIX) {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Could not find the Logitech G600 file path.",
+            )
+        })
+
+    // for entry in fs::read_dir(K_DIR)? {
+    //     let path = entry?.path();
+    //     if let Some(stem) = path.file_stem() {
+    //         if let Some(filename) = stem.to_str() {
+    //             println!("Found a path: {:}", filename);
+    //             if filename.starts_with(K_PREFIX) && filename.ends_with(K_SUFFIX) {
+    //                 println!("possible G600-Path: {:}", filename);
+    //                 // return filename
+    //             }
+    //         }
+    // }
     //     if (starts_with(ent->d_name, K_PREFIX) && ends_with(ent->d_name, K_SUFFIX)) {
     //       strcpy(path, K_DIR);
     //       strcat(path, ent->d_name);
@@ -177,7 +186,6 @@ fn find_g600() -> bool {
     //   }
     //   closedir(dir);
     //   return 2;
-    // }
-    true
 }
+// }
 //
