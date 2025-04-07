@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::PathBuf;
-
 // #include <linux/input.h>
 // #include <stdio.h>
 // #include <stdlib.h>
@@ -10,6 +7,19 @@ use std::path::PathBuf;
 // #include <fcntl.h>
 // #include <unistd.h>
 
+use ioctls::eviocgrab;
+use libc::input_event;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
+use std::os::fd::AsRawFd;
+use std::path::PathBuf;
+use std::{fs, io};
+
+// struct input_event events[64];
+const EVIOCGRAB: &std::os::raw::c_int = &1;
+const INPUT_EVENT_SIZE: usize = std::mem::size_of::<input_event>();
+
 const GREETING: &str = "Starting G600 Linux controller.
 
 It's a good idea to configure G600 with Logitech Gaming Software before running this program:
@@ -18,19 +28,85 @@ It's a good idea to configure G600 with Logitech Gaming Software before running 
  - assign all other keys (including horizontal mouse wheel) to arbitrary (unique) keyboard keys
 ";
 
-// struct input_event events[64];
-const K_DIR: &str = "/dev/input/by-id/";
-const K_PREFIX: &str = "usb-Logitech_Gaming_Mouse_G600_";
-const K_SUFFIX: &str = "-if01-event-kbd";
-//
+const DEVICE_DIR: &str = "/dev/input/by-id/";
+const DEVICE_PATH_PREFIX: &str = "usb-Logitech_Gaming_Mouse_G600_";
+const DEVICE_PATH_SUFFIX: &str = "-if01-event-kbd";
 
 fn main() {
+    let down_commands = HashMap::from([
+        (30, "1"),                            // G9
+        (31, "2"),                            // G10
+        (32, "3"),                            // G11
+        (33, "4"),                            // G12
+        (34, "5"),                            // G13
+        (35, "6"),                            // G14
+        (36, "7"),                            // G15
+        (37, "8"),                            // G16
+        (38, "9"),                            // G17
+        (39, "f10"),                          // G18
+        (4, "i"),                             // G19
+        (5, "esc"),                           // G20
+        (18, "h"),                            // G8
+        (19, "wheel right"),                  // Wheel Right
+        (20, "wheel left"),                   // Wheel Left
+        (6, "f1"),                            // G-Shift G9
+        (7, "f2"),                            // G-Shift G10
+        (8, "f3"),                            // G-Shift G11
+        (9, "f4"),                            // G-Shift G12
+        (10, "f5"),                           // G-Shift G13
+        (11, "mount"),                        // G-Shift G14
+        (12, ""),                             // G-Shift G15
+        (13, "v (dodge)"),                    // G-Shift G16
+        (14, "b (wvw)"),                      // G-Shift G17
+        (15, "circumflex (^ == weaponswap)"), // G-Shift G18
+        (16, "shift g19"),                    // G-Shift G19
+        (17, "m"),                            // G-Shift G20
+        (21, "shift g8"),                     // G-Shift G8
+        (22, "shift wheel right"),            // G-Shift Wheel Right
+        (23, "shift wheel left"),             // G-Shift Wheel Left
+        (98, "g7"),       // G7 (currently "cycle sensitivity" => no scancode emitted)
+        (99, "shift g7"), //  G-Shift G7 (currently "cycle sensitivity" => no scancode emitted)
+    ]);
+
+    let up_commands = HashMap::from([
+        (30, "1"),                            // G9
+        (31, "2"),                            // G10
+        (32, "3"),                            // G11
+        (33, "4"),                            // G12
+        (34, "5"),                            // G13
+        (35, "6"),                            // G14
+        (36, "7"),                            // G15
+        (37, "8"),                            // G16
+        (38, "9"),                            // G17
+        (39, "f10"),                          // G18
+        (4, "i"),                             // G19
+        (5, "esc"),                           // G20
+        (18, "h"),                            // G8
+        (19, "wheel right"),                  // Wheel Right
+        (20, "wheel left"),                   // Wheel Left
+        (6, "f1"),                            // G-Shift G9
+        (7, "f2"),                            // G-Shift G10
+        (8, "f3"),                            // G-Shift G11
+        (9, "f4"),                            // G-Shift G12
+        (10, "f5"),                           // G-Shift G13
+        (11, "mount"),                        // G-Shift G14
+        (12, ""),                             // G-Shift G15
+        (13, "v (dodge)"),                    // G-Shift G16
+        (14, "b (wvw)"),                      // G-Shift G17
+        (15, "circumflex (^ == weaponswap)"), // G-Shift G18
+        (16, "shift g19"),                    // G-Shift G19
+        (17, "m"),                            // G-Shift G20
+        (21, "shift g8"),                     // G-Shift G8
+        (22, "shift wheel right"),            // G-Shift Wheel Right
+        (23, "shift wheel left"),             // G-Shift Wheel Left
+        (98, "g7"),       // G7 (currently "cycle sensitivity" => no scancode emitted)
+        (99, "shift g7"), //  G-Shift G7 (currently "cycle sensitivity" => no scancode emitted)
+    ]);
+
     println!("{GREETING}");
 
     // char path[1024];
     // int find_error = find_g600(&path);
-    let path_exists = find_g600();
-    // println!("{}", path_exists.to_string())
     //   if (find_error) {
     //     printf("Error: Couldn't find G600 input device.\n");
     //     switch(find_error) {
@@ -44,6 +120,7 @@ fn main() {
     //     printf("Suggestion: Maybe a permission is missing. Try running this program with with sudo.\n");
     //     return 1;
     //   }
+    let g600_path = find_g600().unwrap();
     //   int fd = open(path, O_RDONLY);
     //   if (fd < 0) {
     //     printf("Error: Couldn't open \"%s\" for reading.\n", path);
@@ -51,33 +128,55 @@ fn main() {
     //     printf("Suggestion: Maybe a permission is missing. Try running this program with with sudo.\n");
     //     return 1;
     //   }
-    //
+    let mut g600 = match File::open(&g600_path) {
+        Err(why) => panic!("couldn't open {:?}: {}", &g600_path, why),
+        Ok(file) => file,
+    };
+
     //   ioctl(fd, EVIOCGRAB, 1);
+    unsafe { eviocgrab(g600.as_raw_fd(), EVIOCGRAB) };
     //   printf("G600 controller started successfully.\n\n");
+    println!("G600 controller started successfully\n");
     //   while (1) {
-    //     size_t n = read(fd, events, sizeof(events));
-    //     if (n <= 0) return 2;
-    //     if (n < sizeof(struct input_event) * 2) continue;
-    //     if (events[0].type != 4) continue;
-    //     if (events[0].code != 4) continue;
-    //     if (events[1].type != 1) continue;
-    //     int pressed = events[1].value;
-    //     int scancode = events[0].value & ~0x70000;
-    //
-    //     const char* actionStr = (pressed) ? "Pressed" : "Released";
-    //     printf("%s scancode %d.\n",actionStr, scancode);
-    //
-    //     const char *downCommand = downCommands[scancode], *upCommand = upCommands[scancode];
-    //     const char *cmdToRun = (pressed) ? downCommand : upCommand;
-    //     if (!cmdToRun || !strlen(cmdToRun)) continue;
-    //
-    //     printf("Executing: \"%s\"\n", cmdToRun);
-    //     system(cmdToRun);
-    //     printf("\n");
-    //   }
-    //
-    //   close(fd);
-    // }
+    loop {
+        //     size_t n = read(fd, events, sizeof(events));
+        //     if (n <= 0) return 2;
+        //     if (n < sizeof(struct input_event) * 2) continue;
+        let events = read_event_batch(&mut g600);
+        assert!(events.len() == 2 || events.len() == 3);
+
+        //     if (events[0].type != 4) continue;
+        //     if (events[0].code != 4) continue;
+        //     if (events[1].type != 1) continue;
+        if events[0].type_ != 4 || events[0].code != 4 || events[1].type_ != 1 {
+            continue;
+        }
+        //     int pressed = events[1].value;
+        //     int scancode = events[0].value & ~0x70000;
+        //     const char* actionStr = (pressed) ? "Pressed" : "Released";
+        //     printf("%s scancode %d.\n",actionStr, scancode);
+        let pressed = events[1].value == 1;
+        let scancode = events[0].value & !0x70000;
+        // println!("{:?}\n", scancode);
+
+        let command = if pressed {
+            down_commands[&scancode]
+        } else {
+            up_commands[&scancode]
+        };
+        println!("{:?} {:?}\n", command, if pressed { "down" } else { "up" });
+        //     const char *downCommand = downCommands[scancode], *upCommand = upCommands[scancode];
+        //     const char *cmdToRun = (pressed) ? downCommand : upCommand;
+        //     if (!cmdToRun || !strlen(cmdToRun)) continue;
+        //
+        //     printf("Executing: \"%s\"\n", cmdToRun);
+        //     system(cmdToRun);
+        //     printf("\n");
+        //   }
+        //
+        //   close(fd);
+        // }
+    }
     // use std::{env, fs};
 }
 // // ADD KEY->COMMAND MAPPINGS HERE:
@@ -119,6 +218,7 @@ fn main() {
 //   [29] = "" // G-Shift Wheel Left
 //
 // };
+
 // // You can add different commands when the button is lifted here, formatted like above
 // const char *upCommands[64];
 //
@@ -135,6 +235,27 @@ fn main() {
 //   return strncmp(suffix, haystack_end, suffix_length) == 0;
 // }
 //
+
+fn read_event_batch(file: &mut File) -> Vec<input_event> {
+    let mut events: Vec<input_event> = Vec::new();
+    // println!();
+    loop {
+        let event = read_input_event(file).unwrap();
+        // println!("({:?}/{:?}): {:?}", event.type_, event.code, event.value);
+        events.push(event);
+        if event.type_ == 0 && event.code == 0 {
+            return events;
+        };
+    }
+}
+
+fn read_input_event(file: &mut File) -> io::Result<input_event> {
+    let mut buffer = [0; INPUT_EVENT_SIZE];
+    file.read_exact(&mut buffer)?;
+    let event: input_event = unsafe { std::mem::transmute(buffer) };
+    Ok(event)
+}
+
 // // Returns non-0 on error.
 // int find_g600(char *path) {
 fn find_g600() -> Result<PathBuf, std::io::Error> {
@@ -143,25 +264,6 @@ fn find_g600() -> Result<PathBuf, std::io::Error> {
     //     return 1;
     // }
     // while ((ent = readdir(dir))) {
-
-    fs::read_dir(K_DIR)?
-        .filter_map(Result::ok)
-        .find_map(|entry| {
-            let path = entry.path();
-            let filename = path.file_stem()?.to_str()?;
-            if filename.starts_with(K_PREFIX) && filename.ends_with(K_SUFFIX) {
-                Some(path)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Could not find the Logitech G600 file path.",
-            )
-        })
-
     // for entry in fs::read_dir(K_DIR)? {
     //     let path = entry?.path();
     //     if let Some(stem) = path.file_stem() {
@@ -186,6 +288,22 @@ fn find_g600() -> Result<PathBuf, std::io::Error> {
     //   }
     //   closedir(dir);
     //   return 2;
+    // }
+    fs::read_dir(DEVICE_DIR)?
+        .filter_map(Result::ok)
+        .find_map(|entry| {
+            let path = entry.path();
+            let filename = path.file_stem()?.to_str()?;
+            if filename.starts_with(DEVICE_PATH_PREFIX) && filename.ends_with(DEVICE_PATH_SUFFIX) {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Could not find the Logitech G600 file path.",
+            )
+        })
 }
-// }
-//

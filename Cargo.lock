@@ -5,3 +5,29 @@ version = 4
 [[package]]
 name = "g600"
 version = "0.0.1"
+dependencies = [
+ "ioctls",
+ "libc",
+]
+
+[[package]]
+name = "ioctl-sys"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bd11f3a29434026f5ff98c730b668ba74b1033637b8817940b54d040696133c"
+
+[[package]]
+name = "ioctls"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "935b1b0e0f1c6f47c4cffbc08782bd8875d4d475f78191eb1a0c3bcf60de71e8"
+dependencies = [
+ "ioctl-sys",
+ "libc",
+]
+
+[[package]]
+name = "libc"
+version = "0.2.171"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6"
