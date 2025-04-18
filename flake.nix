@@ -33,6 +33,11 @@
     {
       packages.${system}.default = g600;
 
+      nixosModules =
+        {
+          default = import ./module.nix { inherit g600; };
+        };
+
       apps.${system}.default = {
         type = "app";
         program = "${self.packages.${system}.default}/bin/g600";
