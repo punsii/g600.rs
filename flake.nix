@@ -44,6 +44,7 @@
             [
               treefmtEval.config.build.wrapper
               rust-analyzer
+              xdotool
             ];
         };
       };

@@ -5,6 +5,7 @@ authors = ["Paul Menhart"]
 edition = "2021"
 
 [dependencies]
+enigo = "0.3.0"
 ioctls = "0.6.2"
 libc = "0.2.171"
 
