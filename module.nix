@@ -13,7 +13,8 @@
       "g600" =
         {
           description = "Service that runs the g600 remapper";
-          wantedBy = [ "default.target" ];
+          wantedBy = [ "graphical-session.target" ];
+          after = [ "graphical-session-pre.target" ];
           serviceConfig = {
             ExecStart = "/run/wrappers/bin/g600";
           };
