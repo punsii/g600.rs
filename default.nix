@@ -7,4 +7,7 @@ pkgs.rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ./Cargo.lock;
   };
+  buildInputs = with pkgs; [
+    xdotool
+  ];
 }

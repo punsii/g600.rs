@@ -7,6 +7,14 @@
 // #include <fcntl.h>
 // #include <unistd.h>
 
+use enigo::{
+    // Direction::{Click, Press, Release},
+    Direction::{Press, Release},
+    Enigo,
+    Key,
+    Keyboard,
+    Settings,
+};
 use ioctls::eviocgrab;
 use libc::input_event;
 use std::collections::HashMap;
@@ -33,76 +41,43 @@ const DEVICE_PATH_PREFIX: &str = "usb-Logitech_Gaming_Mouse_G600_";
 const DEVICE_PATH_SUFFIX: &str = "-if01-event-kbd";
 
 fn main() {
-    let down_commands = HashMap::from([
-        (30, "1"),                            // G9
-        (31, "2"),                            // G10
-        (32, "3"),                            // G11
-        (33, "4"),                            // G12
-        (34, "5"),                            // G13
-        (35, "6"),                            // G14
-        (36, "7"),                            // G15
-        (37, "8"),                            // G16
-        (38, "9"),                            // G17
-        (39, "f10"),                          // G18
-        (4, "i"),                             // G19
-        (5, "esc"),                           // G20
-        (18, "h"),                            // G8
-        (19, "wheel right"),                  // Wheel Right
-        (20, "wheel left"),                   // Wheel Left
-        (6, "f1"),                            // G-Shift G9
-        (7, "f2"),                            // G-Shift G10
-        (8, "f3"),                            // G-Shift G11
-        (9, "f4"),                            // G-Shift G12
-        (10, "f5"),                           // G-Shift G13
-        (11, "mount"),                        // G-Shift G14
-        (12, ""),                             // G-Shift G15
-        (13, "v (dodge)"),                    // G-Shift G16
-        (14, "b (wvw)"),                      // G-Shift G17
-        (15, "circumflex (^ == weaponswap)"), // G-Shift G18
-        (16, "shift g19"),                    // G-Shift G19
-        (17, "m"),                            // G-Shift G20
-        (21, "shift g8"),                     // G-Shift G8
-        (22, "shift wheel right"),            // G-Shift Wheel Right
-        (23, "shift wheel left"),             // G-Shift Wheel Left
-        (98, "g7"),       // G7 (currently "cycle sensitivity" => no scancode emitted)
-        (99, "shift g7"), //  G-Shift G7 (currently "cycle sensitivity" => no scancode emitted)
+    // let mut down_commands: HashMap<i32, Box<dyn FnMut() -> ()>> = HashMap::new();
+    let mut enigo = Enigo::new(&Settings::default()).unwrap();
+    let commands = HashMap::from([
+        (30, Key::Unicode('1')), // G9
+        (31, Key::Unicode('2')), // G10
+        (32, Key::Unicode('3')), // G11
+        (33, Key::Unicode('4')), // G12
+        (34, Key::Unicode('5')), // G13
+        (35, Key::Unicode('6')), // G14
+        (36, Key::Unicode('7')), // G15
+        (37, Key::Unicode('8')), // G16
+        (38, Key::Unicode('9')), // G17
+        (39, Key::Unicode('0')), // G18
+        (4, Key::Tab),           // G19
+        (5, Key::Escape),        // G20
+        (18, Key::Unicode('h')), // G8
+        (19, Key::Unicode('m')), // Wheel Right
+        (20, Key::Unicode('i')), // Wheel Left
+        (6, Key::F1),            // G-Shift G9
+        (7, Key::F2),            // G-Shift G10
+        (8, Key::F3),            // G-Shift G11
+        (9, Key::F4),            // G-Shift G12
+        (10, Key::Unicode('v')), // G-Shift G13
+        (11, Key::Unicode('`')), // G-Shift G14
+        (12, Key::Unicode('z')), // G-Shift G15 => Num7
+        (13, Key::F5),           // G-Shift G16
+        (14, Key::Unicode('b')), // G-Shift G17
+        (15, Key::Unicode('z')), // G-Shift G18 => Num0
+        (16, Key::Unicode('o')), // G-Shift G19
+        (17, Key::Unicode('x')), // G-Shift G20
+        (21, Key::Unicode('h')), // G-Shift G8
+        (22, Key::Unicode('m')), // G-Shift Wheel Right
+        (23, Key::Unicode('i')), // G-Shift Wheel Left
+        (24, Key::Unicode('u')), // G-Shift Wheel Push
+                                 // 98 => enigo.key(Key::Unicode('g7'), action).unwrap(),       // G7 (currently 'cycle sensitivity' => no scancode emitted)
+                                 // 99 => enigo.key(Key::Unicode('shift g7'), action).unwrap(), //  G-Shift G7 (currently 'cycle sensitivity' => no scancode emitted)
     ]);
-
-    let up_commands = HashMap::from([
-        (30, "1"),                            // G9
-        (31, "2"),                            // G10
-        (32, "3"),                            // G11
-        (33, "4"),                            // G12
-        (34, "5"),                            // G13
-        (35, "6"),                            // G14
-        (36, "7"),                            // G15
-        (37, "8"),                            // G16
-        (38, "9"),                            // G17
-        (39, "f10"),                          // G18
-        (4, "i"),                             // G19
-        (5, "esc"),                           // G20
-        (18, "h"),                            // G8
-        (19, "wheel right"),                  // Wheel Right
-        (20, "wheel left"),                   // Wheel Left
-        (6, "f1"),                            // G-Shift G9
-        (7, "f2"),                            // G-Shift G10
-        (8, "f3"),                            // G-Shift G11
-        (9, "f4"),                            // G-Shift G12
-        (10, "f5"),                           // G-Shift G13
-        (11, "mount"),                        // G-Shift G14
-        (12, ""),                             // G-Shift G15
-        (13, "v (dodge)"),                    // G-Shift G16
-        (14, "b (wvw)"),                      // G-Shift G17
-        (15, "circumflex (^ == weaponswap)"), // G-Shift G18
-        (16, "shift g19"),                    // G-Shift G19
-        (17, "m"),                            // G-Shift G20
-        (21, "shift g8"),                     // G-Shift G8
-        (22, "shift wheel right"),            // G-Shift Wheel Right
-        (23, "shift wheel left"),             // G-Shift Wheel Left
-        (98, "g7"),       // G7 (currently "cycle sensitivity" => no scancode emitted)
-        (99, "shift g7"), //  G-Shift G7 (currently "cycle sensitivity" => no scancode emitted)
-    ]);
-
     println!("{GREETING}");
 
     // char path[1024];
@@ -155,16 +130,17 @@ fn main() {
         //     int scancode = events[0].value & ~0x70000;
         //     const char* actionStr = (pressed) ? "Pressed" : "Released";
         //     printf("%s scancode %d.\n",actionStr, scancode);
-        let pressed = events[1].value == 1;
+        let action = if events[1].value == 1 { Press } else { Release };
         let scancode = events[0].value & !0x70000;
         // println!("{:?}\n", scancode);
 
-        let command = if pressed {
-            down_commands[&scancode]
-        } else {
-            up_commands[&scancode]
-        };
-        println!("{:?} {:?}\n", command, if pressed { "down" } else { "up" });
+        match commands.get(&scancode) {
+            Some(key) => enigo.key(*key, action).unwrap(),
+            None => println!("{:?}\n", scancode),
+        }
+
+        // println!("{:?} {:?}\n", command, if pressed { "down" } else { "up" });
+
         //     const char *downCommand = downCommands[scancode], *upCommand = upCommands[scancode];
         //     const char *cmdToRun = (pressed) ? downCommand : upCommand;
         //     if (!cmdToRun || !strlen(cmdToRun)) continue;
@@ -177,7 +153,6 @@ fn main() {
         //   close(fd);
         // }
     }
-    // use std::{env, fs};
 }
 // // ADD KEY->COMMAND MAPPINGS HERE:
 // const char *downCommands[] = {
